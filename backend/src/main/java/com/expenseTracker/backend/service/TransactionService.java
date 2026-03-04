@@ -1,12 +1,20 @@
 package com.expenseTracker.backend.service;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.springframework.stereotype.Service;
 
+import com.expenseTracker.backend.dto.TransactionDTO;
 import com.expenseTracker.backend.entity.Account;
+import com.expenseTracker.backend.entity.Category;
 import com.expenseTracker.backend.entity.Transaction;
+import com.expenseTracker.backend.entity.User;
 import com.expenseTracker.backend.entity.enums.TransactionType;
 import com.expenseTracker.backend.repository.AccountRepository;
+import com.expenseTracker.backend.repository.CategoryRepository;
 import com.expenseTracker.backend.repository.TransactionRepository;
+import com.expenseTracker.backend.repository.UserRepository;
 
 import jakarta.transaction.Transactional;
 
@@ -15,33 +23,69 @@ public class TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
+    private final CategoryRepository categoryRepository;
+    private final UserRepository userRepository;
 
-    public TransactionService(TransactionRepository transactionRepository, AccountRepository accountRepository) {
+    public TransactionService(TransactionRepository transactionRepository, AccountRepository accountRepository, 
+                              CategoryRepository categoryRepository, UserRepository userRepository) {
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
+        this.categoryRepository = categoryRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional
-    public Transaction createTransaction(Transaction transaction) {
-        
-        // 1. İşlemin yapılacağı hesabı veritabanından bul
-        Account account = accountRepository.findById(transaction.getAccount().getId())
-                .orElseThrow(() -> new RuntimeException("Hesap bulunamadı!"));
+    public TransactionDTO createTransaction(TransactionDTO dto) {
+        // 1. İlişkili kayıtları bul
+        Account account = accountRepository.findById(dto.getAccountId())
+                .orElseThrow(() -> new RuntimeException("Hesap bulunamadı"));
+        Category category = categoryRepository.findById(dto.getCategoryId())
+                .orElseThrow(() -> new RuntimeException("Kategori bulunamadı"));
+        User user = userRepository.findById(dto.getUserId())
+                .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı"));
 
-        // 2. İşlem tipine göre bakiyeyi güncelle (Matematiksel işlemler)
-        if (transaction.getTransactionType() == TransactionType.EXPENSE) {
-            // Gider ise bakiyeden düş (BigDecimal kullanıyoruz)
-            account.setBalance(account.getBalance().subtract(transaction.getAmount()));
-        } else if (transaction.getTransactionType() == TransactionType.INCOME) {
-            // Gelir ise bakiyeye ekle
-            account.setBalance(account.getBalance().add(transaction.getAmount()));
+        // 2. DTO'dan Entity'ye çevir
+        Transaction transaction = new Transaction();
+        transaction.setAmount(dto.getAmount());
+        transaction.setDescription(dto.getDescription());
+        transaction.setTransactionDate(dto.getTransactionDate());
+        transaction.setTransactionType(dto.getTransactionType());
+        transaction.setAccount(account);
+        transaction.setCategory(category);
+        transaction.setUser(user);
+
+        // 3. Bakiye Güncelleme Mantığı (Önceki yazdığımız kurallar)
+        if (dto.getTransactionType() == TransactionType.EXPENSE) {
+            account.setBalance(account.getBalance().subtract(dto.getAmount()));
+        } else if (dto.getTransactionType() == TransactionType.INCOME) {
+            account.setBalance(account.getBalance().add(dto.getAmount()));
         }
 
-        // 3. Güncel bakiyeli hesabı kaydet
         accountRepository.save(account);
+        Transaction saved = transactionRepository.save(transaction);
 
-        // 4. Son olarak işlemin (transaction) kendisini kaydet ve döndür
-        return transactionRepository.save(transaction);
+        return convertToDTO(saved);
     }
 
+    public List<TransactionDTO> getTransactionsByUserId(Long userId) {
+        return transactionRepository.findByUserId(userId)
+                .stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    private TransactionDTO convertToDTO(Transaction t) {
+        TransactionDTO dto = new TransactionDTO();
+        dto.setId(t.getId());
+        dto.setAmount(t.getAmount());
+        dto.setDescription(t.getDescription());
+        dto.setTransactionDate(t.getTransactionDate());
+        dto.setTransactionType(t.getTransactionType());
+        dto.setAccountId(t.getAccount().getId());
+        dto.setAccountName(t.getAccount().getAccountName());
+        dto.setCategoryId(t.getCategory().getId());
+        dto.setCategoryName(t.getCategory().getName());
+        dto.setUserId(t.getUser().getId());
+        return dto;
+    }
 }
