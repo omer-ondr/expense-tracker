@@ -14,8 +14,9 @@ public class TransactionDTO {
     private String description;
     private LocalDateTime transactionDate;
     private TransactionType transactionType;
+    private Long targetAccountId;
     
-    
+    // İlişkiler: Frontend'e sadece ID ve isim göndermek yeterli olur
     private Long accountId;
     private String accountName;
     private Long categoryId;

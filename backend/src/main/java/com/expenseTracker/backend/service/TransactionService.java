@@ -1,5 +1,6 @@
 package com.expenseTracker.backend.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,9 +30,9 @@ public class TransactionService {
     private final BudgetRepository budgetRepository; // 1. Bütçe Reposu Eklendi
 
     // Constructor'ı (Yapıcı Metot) Güncelliyoruz
-    public TransactionService(TransactionRepository transactionRepository, AccountRepository accountRepository, 
-                              CategoryRepository categoryRepository, UserRepository userRepository,
-                              BudgetRepository budgetRepository) { 
+    public TransactionService(TransactionRepository transactionRepository, AccountRepository accountRepository,
+            CategoryRepository categoryRepository, UserRepository userRepository,
+            BudgetRepository budgetRepository) {
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
         this.categoryRepository = categoryRepository;
@@ -59,30 +60,48 @@ public class TransactionService {
 
         // --- AKILLI DOKUNUŞ BURADA BAŞLIYOR ---
         if (dto.getTransactionType() == TransactionType.EXPENSE) {
-            // 1. Giderse hesaptaki parayı düş
             account.setBalance(account.getBalance().subtract(dto.getAmount()));
-            
-            // 2. Bu harcamanın kategorisinde bir bütçe var mı diye kontrol et
+
             budgetRepository.findByUserIdAndCategoryId(dto.getUserId(), dto.getCategoryId())
                     .ifPresent(budget -> {
-                        // Eğer bütçe varsa, harcanan miktarı (spentAmount) yeni harcama kadar artır!
                         budget.setSpentAmount(budget.getSpentAmount().add(dto.getAmount()));
-                        budgetRepository.save(budget); // Güncel bütçeyi kaydet
+                        budgetRepository.save(budget);
                     });
 
+            // 2. GELİR MANTIĞI
         } else if (dto.getTransactionType() == TransactionType.INCOME) {
-            // Gelirse hesaptaki parayı artır
             account.setBalance(account.getBalance().add(dto.getAmount()));
+
+            // 3. TRANSFER MANTIĞI (YENİ!)
+        } else if (dto.getTransactionType() == TransactionType.TRANSFER) {
+            // Ana hesaptan (Gönderen) parayı düş
+            account.setBalance(account.getBalance().subtract(dto.getAmount()));
+
+            // Hedef hesabı (Alan) bul ve parayı ekle
+            if (dto.getTargetAccountId() == null) {
+                throw new RuntimeException("Transfer için hedef hesap (targetAccountId) zorunludur!");
+            }
+            Account targetAccount = accountRepository.findById(dto.getTargetAccountId())
+                    .orElseThrow(() -> new RuntimeException("Hedef hesap bulunamadı!"));
+
+            targetAccount.setBalance(targetAccount.getBalance().add(dto.getAmount()));
+            accountRepository.save(targetAccount); // Hedef hesabı da kaydet
         }
 
         accountRepository.save(account);
         Transaction saved = transactionRepository.save(transaction);
-
         return convertToDTO(saved);
     }
 
     public List<TransactionDTO> getTransactionsByUserId(Long userId) {
         return transactionRepository.findByUserId(userId)
+                .stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    public List<TransactionDTO> getTransactionsByDate(Long userId, LocalDateTime startDate, LocalDateTime endDate) {
+        return transactionRepository.findByUserIdAndTransactionDateBetween(userId, startDate, endDate)
                 .stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
