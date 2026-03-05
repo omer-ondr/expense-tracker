@@ -15,7 +15,6 @@ import com.expenseTracker.backend.service.AccountService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
-
 @RestController
 @RequestMapping("/api/accounts")
 @CrossOrigin(origins = "http://localhost:3000")
@@ -36,5 +35,5 @@ public class AccountController {
     public ResponseEntity<List<AccountDTO>> getAccountsByUser(@PathVariable Long userId) {
         return ResponseEntity.ok(accountService.getAccountsByUserId(userId));
     }
-    
+
 }

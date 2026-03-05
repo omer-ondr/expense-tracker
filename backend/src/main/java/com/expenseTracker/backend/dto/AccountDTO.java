@@ -12,5 +12,5 @@ public class AccountDTO {
     private String accountName;
     private AccountType accountType;
     private BigDecimal balance;
-    private Long userId; // Entity yerine sadece ID taşıyoruz
+    private Long userId; 
 }

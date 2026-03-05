@@ -6,8 +6,8 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class AuthResponse {
-    private String token;      // Ürettiğimiz o meşhur JWT
-    private Long userId;       // Frontend (Next.js) bu ID ile harcamaları çekecek
+    private String token;      
+    private Long userId;       
     private String firstName;
     private String lastName;
 }

@@ -12,6 +12,7 @@ import com.expenseTracker.backend.entity.Transaction;
 import com.expenseTracker.backend.entity.User;
 import com.expenseTracker.backend.entity.enums.TransactionType;
 import com.expenseTracker.backend.repository.AccountRepository;
+import com.expenseTracker.backend.repository.BudgetRepository;
 import com.expenseTracker.backend.repository.CategoryRepository;
 import com.expenseTracker.backend.repository.TransactionRepository;
 import com.expenseTracker.backend.repository.UserRepository;
@@ -25,18 +26,21 @@ public class TransactionService {
     private final AccountRepository accountRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
+    private final BudgetRepository budgetRepository; // 1. Bütçe Reposu Eklendi
 
+    // Constructor'ı (Yapıcı Metot) Güncelliyoruz
     public TransactionService(TransactionRepository transactionRepository, AccountRepository accountRepository, 
-                              CategoryRepository categoryRepository, UserRepository userRepository) {
+                              CategoryRepository categoryRepository, UserRepository userRepository,
+                              BudgetRepository budgetRepository) { 
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
         this.categoryRepository = categoryRepository;
         this.userRepository = userRepository;
+        this.budgetRepository = budgetRepository;
     }
 
     @Transactional
     public TransactionDTO createTransaction(TransactionDTO dto) {
-        // 1. İlişkili kayıtları bul
         Account account = accountRepository.findById(dto.getAccountId())
                 .orElseThrow(() -> new RuntimeException("Hesap bulunamadı"));
         Category category = categoryRepository.findById(dto.getCategoryId())
@@ -44,7 +48,6 @@ public class TransactionService {
         User user = userRepository.findById(dto.getUserId())
                 .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı"));
 
-        // 2. DTO'dan Entity'ye çevir
         Transaction transaction = new Transaction();
         transaction.setAmount(dto.getAmount());
         transaction.setDescription(dto.getDescription());
@@ -54,10 +57,21 @@ public class TransactionService {
         transaction.setCategory(category);
         transaction.setUser(user);
 
-        // 3. Bakiye Güncelleme Mantığı (Önceki yazdığımız kurallar)
+        // --- AKILLI DOKUNUŞ BURADA BAŞLIYOR ---
         if (dto.getTransactionType() == TransactionType.EXPENSE) {
+            // 1. Giderse hesaptaki parayı düş
             account.setBalance(account.getBalance().subtract(dto.getAmount()));
+            
+            // 2. Bu harcamanın kategorisinde bir bütçe var mı diye kontrol et
+            budgetRepository.findByUserIdAndCategoryId(dto.getUserId(), dto.getCategoryId())
+                    .ifPresent(budget -> {
+                        // Eğer bütçe varsa, harcanan miktarı (spentAmount) yeni harcama kadar artır!
+                        budget.setSpentAmount(budget.getSpentAmount().add(dto.getAmount()));
+                        budgetRepository.save(budget); // Güncel bütçeyi kaydet
+                    });
+
         } else if (dto.getTransactionType() == TransactionType.INCOME) {
+            // Gelirse hesaptaki parayı artır
             account.setBalance(account.getBalance().add(dto.getAmount()));
         }
 

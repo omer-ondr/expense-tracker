@@ -8,7 +8,7 @@ import org.springframework.stereotype.Repository;
 import com.expenseTracker.backend.entity.SavingGoal;
 
 @Repository
-public interface SavingGaolRepository extends JpaRepository<SavingGoal, Long> {
+public interface SavingGoalRepository extends JpaRepository<SavingGoal, Long> {
 
     List<SavingGoal> findByUserId(Long userId);
 }
